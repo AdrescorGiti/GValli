@@ -1,4 +1,5 @@
 # GValli
+
 # 🚀 GValli
 
 **GValli** is an ultra-fast, concurrent CLI package manager aggregator written in Rust. It unifies searching, installing, and managing packages across **AUR**, **Pacman**, and **Flatpak** into a single, intuitive interface.
@@ -37,3 +38,99 @@
    ```bash
    git clone [https://github.com/yourusername/gvalli.git](https://github.com/yourusername/gvalli.git)
    cd gvalli
+
+```
+
+2. Build and install locally via `makepkg`:
+```bash
+cargo generate-lockfile
+makepkg -si
+
+```
+
+
+3. Or build manually with Cargo:
+```bash
+cargo build --release
+
+```
+
+
+
+---
+
+## 📄 License
+
+Distributed under the MIT License.
+
+---
+
+---
+
+# 🚀 GValli (Русская версия)
+
+**GValli** — это ультрабыстрый асинхронный CLI-агрегатор пакетных менеджеров на Rust. Он объединяет поиск, установку и управление пакетами из **AUR**, **Pacman** и **Flatpak** в едином удобном интерфейсе.
+
+---
+
+## ✨ Особенности
+
+* **⚡ Параллельный асинхронный движок:** Параллельный поиск через `tokio::join!` (время отклика <0.1s).
+* **🎨 Интерактивный TUI:** Плавный терминальный интерфейс с поддержкой скроллинга (Viewport) и удобным выбором пакетов.
+* **🛡️ Безопасность сборки:** Безопасная сборка AUR-пакетов. Автоматический сброс root-привилегий до `$SUDO_USER` на этапе работы `makepkg`.
+* **🔗 Рекурсивный резолвер AUR:** Автоматический анализ `.SRCINFO` и рекурсивная сборка вложенных AUR-зависимостей.
+* **🎯 Дедупликация и приоритеты:** Объединение результатов поиска со строгим приоритетом: `[1] AUR > [2] Pacman > [3] Flatpak`.
+* **🔍 Умный роутинг и нечеткое удаление:** Автоматическое определение источника пакета и нечеткий поиск при удалении.
+* **⚡ Короткие алиасы:** Быстрые сокращения команд (`s`, `i`, `r`, `u`, `c`).
+
+---
+
+## ⌨️ Использование и Алиасы
+
+| Команда | Алиас | Описание |
+| --- | --- | --- |
+| `gvalli search <запрос>` | `gvalli s` / `gvalli S` | Параллельный поиск по всем репозиториям с вызовом TUI-меню |
+| `gvalli install <пакет>` | `gvalli i` / `gvalli I` | Умная установка пакета с автоопределением источника |
+| `gvalli remove <пакет>` | `gvalli r` / `gvalli R` | Поиск и нечеткое удаление пакета из системы |
+| `gvalli update` | `gvalli u` / `gvalli U` / `Syu` | Полное обновление системы (Pacman + Flatpak) |
+| `gvalli clean` | `gvalli c` / `gvalli C` | Очистка кэша Pacman и неиспользуемых пакетов Flatpak |
+
+---
+
+## 🛠️ Установка
+
+### Сборка из исходников (Arch Linux)
+
+1. Клонируйте репозиторий:
+```bash
+git clone [https://github.com/yourusername/gvalli.git](https://github.com/yourusername/gvalli.git)
+cd gvalli
+
+```
+
+
+2. Соберите и установите пакет через `makepkg`:
+```bash
+cargo generate-lockfile
+makepkg -si
+
+```
+
+
+3. Или соберите бинарник вручную через Cargo:
+```bash
+cargo build --release
+
+```
+
+
+
+---
+
+## 📄 Лицензия
+
+Распространяется под лицензией MIT.
+
+```
+
+```
