@@ -57,7 +57,7 @@ Distributed under the MIT License.
 
 ## 📥 Установка
 
-Скачайте готовый собранный пакет `.pkg.tar.zst` со страницы [Releases](https://www.google.com/url?sa=E&source=gmail&q=https://github.com/yourusername/gvalli/releases) и установите его одной командой через `pacman`:
+Скачайте готовый собранный пакет `.pkg.tar.zst` со страницы [Releases](https://github.com/AdrescorGiti/GValli/releases) и установите его одной командой через `pacman`:
 
 ```bash
 sudo pacman -U gvalli-0.1.0-1-x86_64.pkg.tar.zst
