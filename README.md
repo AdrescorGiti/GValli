@@ -11,7 +11,7 @@
 Download the pre-compiled `.pkg.tar.zst` package from the [Releases](https://github.com/yourusername/gvalli/releases) page and install it with `pacman`:
 
 ```bash
-sudo pacman -U gvalli-0.3.0-1-x86_64.pkg.tar.zst
+sudo pacman -U gvalli-0.1.0-1-x86_64.pkg.tar.zst
 
 ```
 
@@ -60,7 +60,7 @@ Distributed under the MIT License.
 Скачайте готовый собранный пакет `.pkg.tar.zst` со страницы [Releases](https://www.google.com/url?sa=E&source=gmail&q=https://github.com/yourusername/gvalli/releases) и установите его одной командой через `pacman`:
 
 ```bash
-sudo pacman -U gvalli-0.3.0-1-x86_64.pkg.tar.zst
+sudo pacman -U gvalli-0.1.0-1-x86_64.pkg.tar.zst
 
 ```
 
