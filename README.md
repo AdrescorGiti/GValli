@@ -6,56 +6,38 @@
 
 ---
 
+## 📥 Installation
+
+Download the pre-compiled `.pkg.tar.zst` package from the [Releases](https://github.com/yourusername/gvalli/releases) page and install it with `pacman`:
+
+```bash
+sudo pacman -U gvalli-0.3.0-1-x86_64.pkg.tar.zst
+
+```
+
+---
+
 ## ✨ Features
 
-- **⚡ Blazing-Fast Concurrency:** Parallel async search via `tokio::join!` (<0.1s response times).
-- **🎨 Interactive TUI:** Smooth terminal UI with viewport scrolling and pagination for easy package selection.
-- **🛡️ Privilege Sandboxing:** Safe AUR builds. Automatically drops root privileges to `$SUDO_USER` during `makepkg` execution.
-- **🔗 Recursive AUR Resolver:** Automatically parses `.SRCINFO` and recursively resolves/builds nested AUR dependencies.
-- **🎯 Deduplication & Priorities:** Merges search results automatically prioritized by `[1] AUR > [2] Pacman > [3] Flatpak`.
-- **🔍 Smart Routing & Fuzzy Removal:** Automatically detects where packages are installed and provides interactive deletion options.
-- **⚡ Short Command Aliases:** Command shortcuts like `s` (search), `i` (install), `r` (remove), `u` (update), and `c` (clean).
+* **⚡ Blazing-Fast Concurrency:** Parallel async search via `tokio::join!` (<0.1s response times).
+* **🎨 Interactive TUI:** Smooth terminal UI with viewport scrolling for easy package selection.
+* **🛡️ Privilege Sandboxing:** Safe AUR builds. Automatically drops root privileges to `$SUDO_USER` during `makepkg` execution.
+* **🔗 Recursive AUR Resolver:** Automatically parses `.SRCINFO` and recursively resolves/builds nested AUR dependencies.
+* **🎯 Deduplication & Priorities:** Merges search results automatically prioritized by `[1] AUR > [2] Pacman > [3] Flatpak`.
+* **🔍 Smart Routing & Fuzzy Removal:** Automatically detects where packages are installed and provides interactive deletion options.
+* **⚡ Short Command Aliases:** Command shortcuts like `s` (search), `i` (install), `r` (remove), `u` (update), and `c` (clean).
 
 ---
 
 ## ⌨️ Command Usage & Aliases
 
 | Command | Alias | Description |
-| :--- | :--- | :--- |
+| --- | --- | --- |
 | `gvalli search <query>` | `gvalli s` / `gvalli S` | Interactive parallel search across all repositories with TUI selection |
-| `gvalli install <pkg>` | `gvalli i` / `gvalli I` | Smart package installation (auto-detects source or source routing) |
+| `gvalli install <pkg>` | `gvalli i` / `gvalli I` | Smart package installation (auto-detects source) |
 | `gvalli remove <pkg>` | `gvalli r` / `gvalli R` | Fuzzy package search and removal from system |
 | `gvalli update` | `gvalli u` / `gvalli U` / `Syu` | Full system update (Pacman repos + Flatpak runtimes) |
 | `gvalli clean` | `gvalli c` / `gvalli C` | Cleans Pacman package cache and removes unused Flatpak runtimes |
-
----
-
-## 🛠️ Installation
-
-### Building from Source (Arch Linux)
-
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/yourusername/gvalli.git](https://github.com/yourusername/gvalli.git)
-   cd gvalli
-
-```
-
-2. Build and install locally via `makepkg`:
-```bash
-cargo generate-lockfile
-makepkg -si
-
-```
-
-
-3. Or build manually with Cargo:
-```bash
-cargo build --release
-
-```
-
-
 
 ---
 
@@ -73,14 +55,25 @@ Distributed under the MIT License.
 
 ---
 
+## 📥 Установка
+
+Скачайте готовый собранный пакет `.pkg.tar.zst` со страницы [Releases](https://www.google.com/url?sa=E&source=gmail&q=https://github.com/yourusername/gvalli/releases) и установите его одной командой через `pacman`:
+
+```bash
+sudo pacman -U gvalli-0.3.0-1-x86_64.pkg.tar.zst
+
+```
+
+---
+
 ## ✨ Особенности
 
 * **⚡ Параллельный асинхронный движок:** Параллельный поиск через `tokio::join!` (время отклика <0.1s).
-* **🎨 Интерактивный TUI:** Плавный терминальный интерфейс с поддержкой скроллинга (Viewport) и удобным выбором пакетов.
-* **🛡️ Безопасность сборки:** Безопасная сборка AUR-пакетов. Автоматический сброс root-привилегий до `$SUDO_USER` на этапе работы `makepkg`.
+* **🎨 Интерактивный TUI:** Плавный терминальный интерфейс со скроллингом и удобным выбором пакетов.
+* **🛡️ Безопасность сборки:** Безопасная сборка AUR-пакетов с автоматическим сбросом root-привилегий до `$SUDO_USER`.
 * **🔗 Рекурсивный резолвер AUR:** Автоматический анализ `.SRCINFO` и рекурсивная сборка вложенных AUR-зависимостей.
 * **🎯 Дедупликация и приоритеты:** Объединение результатов поиска со строгим приоритетом: `[1] AUR > [2] Pacman > [3] Flatpak`.
-* **🔍 Умный роутинг и нечеткое удаление:** Автоматическое определение источника пакета и нечеткий поиск при удалении.
+* **🔍 Умный роутинг и нечеткое удаление:** Автоматическое определение источника пакета и удобный поиск при удалении.
 * **⚡ Короткие алиасы:** Быстрые сокращения команд (`s`, `i`, `r`, `u`, `c`).
 
 ---
@@ -97,39 +90,13 @@ Distributed under the MIT License.
 
 ---
 
-## 🛠️ Установка
-
-### Сборка из исходников (Arch Linux)
-
-1. Клонируйте репозиторий:
-```bash
-git clone [https://github.com/yourusername/gvalli.git](https://github.com/yourusername/gvalli.git)
-cd gvalli
-
-```
-
-
-2. Соберите и установите пакет через `makepkg`:
-```bash
-cargo generate-lockfile
-makepkg -si
-
-```
-
-
-3. Или соберите бинарник вручную через Cargo:
-```bash
-cargo build --release
-
-```
-
-
-
----
-
 ## 📄 Лицензия
 
 Распространяется под лицензией MIT.
+
+```
+
+```
 
 ```
 
