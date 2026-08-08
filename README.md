@@ -8,7 +8,7 @@
 
 ## 📥 Installation
 
-Download the pre-compiled `.pkg.tar.zst` package from the [Releases](https://github.com/yourusername/gvalli/releases) page and install it with `pacman`:
+Download the pre-compiled `.pkg.tar.zst` package from the [Releases]https://github.com/AdrescorGiti/GValli/releases) page and install it with `pacman`:
 
 ```bash
 sudo pacman -U gvalli-0.1.0-1-x86_64.pkg.tar.zst
