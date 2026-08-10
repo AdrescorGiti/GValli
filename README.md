@@ -4,6 +4,7 @@
   <a href="https://github.com/AdrescorGiti/GValli"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.70%2B-orange.svg" alt="Rust" /></a>
   <a href="https://archlinux.org/"><img src="https://img.shields.io/badge/Platform-Arch%20Linux-1793d1.svg" alt="Arch Linux" /></a>
+  <a href="#русская-версия"><img src="https://img.shields.io/badge/README-Русская%20версия-ff69b4.svg" alt="Русская версия" /></a>
 </p>
 
 <div align="center">
@@ -15,6 +16,7 @@
   <a href="#installation"><button>Install</button></a>
   <a href="#quick-start"><button>Quick Start</button></a>
   <a href="#features"><button>Features</button></a>
+  <a href="#русская-версия"><button>Русская версия</button></a>
 </div>
 
 ---
@@ -32,11 +34,11 @@ GValli is designed for users who want a single tool for everyday package managem
       </td>
       <td valign="top" width="33%">
         <h4>🛡️ Safe</h4>
-        <p>AUR builds run with reduced privileges, improving security during compilation.</p>
+        <p>Package builds and system operations run with reduced privileges where appropriate, improving safety.</p>
       </td>
       <td valign="top" width="33%">
         <h4>🧭 Smart</h4>
-        <p>Packages are routed intelligently across AUR, Pacman, and Flatpak based on context.</p>
+        <p>Packages are routed intelligently across Pacman and Flatpak based on context.</p>
       </td>
     </tr>
   </table>
@@ -60,8 +62,8 @@ GValli is designed for users who want a single tool for everyday package managem
     </tr>
     <tr>
       <td valign="top" width="50%">
-        <h4>🔗 Recursive AUR Resolution</h4>
-        <p>Automatically resolves nested AUR dependencies and handles the build chain more effectively.</p>
+        <h4>🔗 Flexible Dependency Handling</h4>
+        <p>Handles package dependency flows in a consistent way across supported package sources.</p>
       </td>
       <td valign="top" width="50%">
         <h4>🎯 Priority-Based Results</h4>
@@ -131,19 +133,45 @@ This project is distributed under the MIT License.
 
 ## Русская версия
 
-GValli — это современный и быстрый CLI-агрегатор для систем на базе Arch. Он объединяет AUR, Pacman и Flatpak в одном удобном интерфейсе для поиска, установки, обновления и обслуживания программ.
+GValli — это современный и быстрый CLI-агрегатор для систем на базе Arch. Он объединяет Pacman и Flatpak в одном удобном интерфейсе для поиска, установки, обновления и обслуживания программ, делая повседневную работу с пакетами проще и быстрее.
 
 <div align="center">
   <a href="#installation"><button>Установка</button></a>
   <a href="#quick-start"><button>Быстрый старт</button></a>
+  <a href="#command-reference"><button>Команды</button></a>
 </div>
+
+### Почему GValli?
+
+GValli создан для тех, кто хочет управлять пакетами без лишней сложности: без постоянного переключения между разными утилитами, без лишних шагов и без ощущения устаревшего интерфейса. Проект сочетает скорость, понятный UX и аккуратную работу с основными сценариями пакетного менеджмента.
 
 ### Ключевые возможности
 
 - ⚡ Быстрый и отзывчивый интерфейс
-- 🛡️ Более безопасная сборка AUR-пакетов
-- 🧭 Умная маршрутизация между источниками пакетов
+- 🧭 Умная маршрутизация между пакетными источниками
 - 🧹 Удобные команды для обновления и очистки системы
+- 🔒 Безопасное поведение при системных операциях и сборке зависимостей
+- 🌐 Поддержка современного рабочего потока для Arch-совместимых систем
+
+### Быстрый старт
+
+```bash
+gvalli search <запрос>
+gvalli install <пакет>
+gvalli remove <пакет>
+gvalli update
+gvalli clean
+```
+
+### Команды
+
+| Команда | Алиас | Описание |
+| --- | --- | --- |
+| `gvalli search <запрос>` | `gvalli s`, `gvalli S` | Поиск по доступным пакетным источникам |
+| `gvalli install <пакет>` | `gvalli i`, `gvalli I` | Установка пакета из подходящего источника |
+| `gvalli remove <пакет>` | `gvalli r`, `gvalli R` | Поиск и удаление пакета из системы |
+| `gvalli update` | `gvalli u`, `gvalli U`, `Syu` | Обновление пакетов и окружения |
+| `gvalli clean` | `gvalli c`, `gvalli C` | Очистка кэша и неиспользуемых данных |
 
 ### Лицензия
 
