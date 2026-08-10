@@ -1,11 +1,13 @@
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+use serde::Serialize;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum PackageSource {
-    Aur = 1,
+    Gos = 1,
     Pacman = 2,
     Flatpak = 3,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PackageResult {
     pub name: String,
     pub version: String,

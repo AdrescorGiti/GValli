@@ -2,27 +2,87 @@ use crate::models::{PackageResult, PackageSource};
 use serde::Deserialize;
 use tokio::process::Command;
 
-#[derive(Deserialize)]
-struct AurResponse { results: Vec<AurResult> }
+pub const GOS_REPO_PACKAGES_URL: &str =
+    "https://raw.githubusercontent.com/AdrescorGiti/gvalli-repo/main/packages.json";
 
-#[derive(Deserialize)]
-struct AurResult {
-    #[serde(rename = "Name")] name: String,
-    #[serde(rename = "Version")] version: String,
-    #[serde(rename = "Description")] description: Option<String>,
+#[derive(Deserialize, Debug, Clone)]
+pub struct GosPackage {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub creator: String,
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    pub url: String,
+    #[serde(default)]
+    pub sha256: String,
 }
 
-pub async fn search_aur(query: &str) -> Vec<PackageResult> {
-    let url = format!("https://aur.archlinux.org/rpc/v5/search/{}", query);
-    let Ok(resp) = reqwest::get(&url).await else { return vec![]; };
-    let Ok(parsed) = resp.json::<AurResponse>().await else { return vec![]; };
-    
-    parsed.results.into_iter().map(|r| PackageResult {
-        name: r.name, 
-        version: r.version,
-        description: r.description.unwrap_or_default(),
-        source: PackageSource::Aur,
-    }).collect()
+#[derive(Deserialize, Debug)]
+struct GosRepoRoot {
+    #[serde(default)]
+    packages: Vec<GosPackage>,
+}
+
+static REPO_CACHE: std::sync::Mutex<Option<Vec<GosPackage>>> = std::sync::Mutex::new(None);
+
+async fn fetch_gos_repo() -> Vec<GosPackage> {
+    let Ok(resp) = reqwest::get(GOS_REPO_PACKAGES_URL).await else { return vec![] };
+    let Ok(text) = resp.text().await else { return vec![] };
+    let root: GosRepoRoot = match serde_json::from_str(&text) {
+        Ok(root) => root,
+        Err(_) => return vec![],
+    };
+    root.packages
+}
+
+async fn load_gos_repo() -> Vec<GosPackage> {
+    {
+        let guard = REPO_CACHE.lock().unwrap();
+        if let Some(cached) = guard.as_ref() {
+            return cached.clone();
+        }
+    }
+
+    let repo = fetch_gos_repo().await;
+    *REPO_CACHE.lock().unwrap() = Some(repo.clone());
+    repo
+}
+
+pub async fn gos_packages() -> Vec<GosPackage> {
+    load_gos_repo().await
+}
+
+pub async fn search_gos(query: &str) -> Vec<PackageResult> {
+    let q_low = query.trim().to_lowercase();
+    load_gos_repo()
+        .await
+        .into_iter()
+        .filter(|p| {
+            p.name.to_lowercase().contains(&q_low)
+                || p.description.to_lowercase().contains(&q_low)
+        })
+        .map(|p| PackageResult {
+            name: p.name,
+            version: p.version,
+            description: p.description,
+            source: PackageSource::Gos,
+        })
+        .collect()
+}
+
+pub async fn get_gos_package(name: &str) -> Option<GosPackage> {
+    load_gos_repo()
+        .await
+        .into_iter()
+        .find(|p| p.name.eq_ignore_ascii_case(name))
+}
+
+pub async fn check_gos_reachable() -> bool {
+    reqwest::get(GOS_REPO_PACKAGES_URL)
+        .await
+        .map(|r| r.status().is_success() || r.status().is_client_error())
+        .unwrap_or(false)
 }
 
 pub async fn search_pacman(query: &str) -> Vec<PackageResult> {
@@ -50,7 +110,7 @@ pub async fn search_flatpak(query: &str) -> Vec<PackageResult> {
     let Ok(out) = Command::new("flatpak")
         .args(["search", "--columns=app,name,version,description", query])
         .output().await else { return vec![]; };
-        
+
     let mut results = vec![];
     for line in String::from_utf8_lossy(&out.stdout).lines() {
         let cols: Vec<&str> = line.split('\t').collect();
@@ -65,4 +125,8 @@ pub async fn search_flatpak(query: &str) -> Vec<PackageResult> {
         }
     }
     results
+}
+
+pub async fn get_gos_info(package: &str) -> Option<GosPackage> {
+    get_gos_package(package).await
 }

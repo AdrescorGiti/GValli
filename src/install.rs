@@ -1,156 +1,99 @@
 use std::env;
-use std::pin::Pin;
 use tokio::process::Command;
 use crate::models::PackageSource;
 
-pub async fn smart_install(package: &str, noconfirm: bool, force_source: Option<&PackageSource>) {
-    let mut source = force_source.cloned();
-    let mut actual_package_name = package.to_string();
+#[derive(Debug, Clone, PartialEq)]
+pub enum SourceKind {
+    Pacman,
+    Flatpak,
+    Gos(String),
+}
 
-    if source.is_none() {
-        if Command::new("pacman").args(["-Si", package]).output().await.map_or(false, |o| o.status.success()) {
-            source = Some(PackageSource::Pacman);
-        } else {
-            let flat_res = crate::search::search_flatpak(package).await;
-            if let Some(matched) = flat_res.iter().find(|p| p.name.to_lowercase() == package.to_lowercase()) {
-                source = Some(PackageSource::Flatpak);
-                actual_package_name = matched.name.clone();
-            } else {
-                let aur_check = Command::new("git").args(["ls-remote", &format!("https://aur.archlinux.org/{}.git", package)]).output().await;
-                if aur_check.map_or(false, |o| o.status.success()) {
-                    source = Some(PackageSource::Aur);
-                } else {
-                    eprintln!("❌ Точный пакет '{}' не найден.", package);
-                    return;
-                }
-            }
-        }
-    }
-
-    if source.as_ref().unwrap() == &PackageSource::Aur || source.as_ref().unwrap() == &PackageSource::Pacman {
-        if env::var("USER").unwrap_or_default() != "root" {
-            println!("🔑 Для установки '{}' требуются права root. Вызов sudo...", actual_package_name);
-            let mut args = vec!["gvalli", "install", &actual_package_name];
-            if noconfirm { args.push("--noconfirm"); }
-            
-            let status = Command::new("sudo").args(&args).status().await;
-            if status.is_err() || !status.unwrap().success() {
-                eprintln!("❌ Ошибка эскалации привилегий.");
-            }
-            return;
-        }
-    }
-
-    match source.unwrap() {
-        PackageSource::Pacman => {
-            println!("🚀 Установка из Pacman: {}", actual_package_name);
-            let mut args = vec!["-S", &actual_package_name];
-            if noconfirm { args.push("--noconfirm"); }
-            let _ = Command::new("pacman").args(&args).status().await;
-        }
-        PackageSource::Flatpak => {
-            println!("🚀 Установка из Flatpak: {}", actual_package_name);
-            let mut args = vec!["install", &actual_package_name];
-            if noconfirm { args.push("-y"); }
-            let _ = Command::new("flatpak").args(&args).status().await;
-        }
-        PackageSource::Aur => {
-            install_aur(actual_package_name, noconfirm).await;
+impl SourceKind {
+    pub fn label(&self) -> &'static str {
+        match self {
+            SourceKind::Pacman => "Pacman",
+            SourceKind::Flatpak => "Flatpak",
+            SourceKind::Gos(_) => "G OS",
         }
     }
 }
 
-fn install_aur(package: String, noconfirm: bool) -> Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
-    Box::pin(async move {
-        println!("🚀 Установка из AUR: {}", package);
-
-        let sudo_user = env::var("SUDO_USER").unwrap_or_default();
-        if sudo_user.is_empty() {
-            eprintln!("❌ Критическая ошибка: Не найден $SUDO_USER. Невозможно собрать пакет в песочнице.");
-            return;
+pub async fn smart_install(package: &str, noconfirm: bool, force_source: Option<PackageSource>) {
+    let source = resolve_source(package, force_source).await;
+    match &source {
+        Some(SourceKind::Gos(url)) => {
+            println!("🚀 Установка из G OS repository: {}", package);
+            crate::gpkg::install_package(url).await;
         }
-
-        let build_dir = format!("/tmp/gvalli-build-{}", package);
-        let _ = Command::new("rm").args(["-rf", &build_dir]).status().await;
-
-        println!("🔽 Клонирование AUR ({})", sudo_user);
-        let clone_cmd = format!("git clone https://aur.archlinux.org/{}.git {}", package, build_dir);
-        if !Command::new("su").args(["-", &sudo_user, "-c", &clone_cmd]).status().await.unwrap().success() {
-            eprintln!("❌ Ошибка клонирования. Пакет не существует.");
-            return;
+        Some(SourceKind::Pacman) => {
+            install_pacman(package, noconfirm).await;
         }
+        Some(SourceKind::Flatpak) => {
+            install_flatpak(package, noconfirm).await;
+        }
+        None => {
+            eprintln!("❌ Пакет '{}' не найден ни в одном источнике.", package);
+        }
+    }
+}
 
-        println!("🔍 Анализ зависимостей...");
-        let srcinfo_cmd = format!("cd {} && makepkg --printsrcinfo", build_dir);
-        if let Ok(out) = Command::new("su").args(["-", &sudo_user, "-c", &srcinfo_cmd]).output().await {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let re = regex::Regex::new(r"^[a-z0-9_]*depends\s*=\s*([a-zA-Z0-9_\-\.\+]+)").unwrap();
-            let mut all_deps = Vec::new();
-
-            for line in stdout.lines() {
-                if let Some(cap) = re.captures(line.trim()) {
-                    all_deps.push(cap[1].to_string());
-                }
+async fn resolve_source(package: &str, force_source: Option<PackageSource>) -> Option<SourceKind> {
+    if let Some(src) = force_source {
+        return match src {
+            PackageSource::Gos => {
+                let repo_pkg = crate::search::get_gos_package(package).await?;
+                Some(SourceKind::Gos(repo_pkg.url.clone()))
             }
+            PackageSource::Pacman => Some(SourceKind::Pacman),
+            PackageSource::Flatpak => Some(SourceKind::Flatpak),
+        };
+    }
 
-            if !all_deps.is_empty() {
-                let missing_check = Command::new("pacman").arg("-T").args(&all_deps).output().await;
-                if let Ok(missing_out) = missing_check {
-                    let missing_str = String::from_utf8_lossy(&missing_out.stdout);
-                    let missing_deps: Vec<&str> = missing_str.split_whitespace().collect();
+    if let Some(repo_pkg) = crate::search::get_gos_package(package).await {
+        return Some(SourceKind::Gos(repo_pkg.url.clone()));
+    }
 
-                    if !missing_deps.is_empty() {
-                        let mut repo_deps = Vec::new();
-                        let mut aur_deps = Vec::new();
+    if Command::new("pacman").args(["-Si", package]).output().await.map_or(false, |o| o.status.success()) {
+        return Some(SourceKind::Pacman);
+    }
 
-                        for dep in missing_deps {
-                            let check = Command::new("pacman").args(["-Sp", dep]).output().await;
-                            if check.map_or(false, |o| o.status.success()) {
-                                repo_deps.push(dep);
-                            } else {
-                                aur_deps.push(dep);
-                            }
-                        }
+    let flat_res = crate::search::search_flatpak(package).await;
+    if flat_res.iter().any(|p| p.name.to_lowercase() == package.to_lowercase()) {
+        return Some(SourceKind::Flatpak);
+    }
 
-                        for aur_dep in aur_deps {
-                            println!("🔗 AUR-зависимость: {}. Устанавливаем...", aur_dep);
-                            install_aur(aur_dep.to_string(), noconfirm).await;
-                        }
+    None
+}
 
-                        if !repo_deps.is_empty() {
-                            println!("📦 Установка системных зависимостей (root): {:?}", repo_deps);
-                            let mut pac_args = vec!["-S", "--needed"];
-                            if noconfirm { pac_args.push("--noconfirm"); }
-                            pac_args.extend(repo_deps);
-                            let _ = Command::new("pacman").args(&pac_args).status().await;
-                        }
-                    }
-                }
-            }
-        }
+pub async fn install_gos_package(repo_pkg: &crate::search::GosPackage) {
+    println!("🚀 Установка из G OS repository: {} v{}", repo_pkg.name, repo_pkg.version);
+    crate::gpkg::install_package(&repo_pkg.url).await;
+}
 
-        println!("🛠 Сборка makepkg ({}) ...", package);
-        let build_cmd = format!("cd {} && makepkg -cf{}", build_dir, if noconfirm { " --noconfirm" } else { "" });
-        if Command::new("su").args(["-", &sudo_user, "-c", &build_cmd]).status().await.unwrap().success() {
-            // makepkg может создавать .pkg.tar.zst, .pkg.tar.xz, .pkg.tar.gz, .pkg.tar.lz
-            // Находим собранный пакет автоматически
-            let find_cmd = format!("ls {}/{}-*.pkg.tar.* 2>/dev/null | head -1", build_dir, package);
-            let pkg_file = if let Ok(out) = Command::new("sh").args(["-c", &find_cmd]).output().await {
-                String::from_utf8_lossy(&out.stdout).trim().to_string()
-            } else {
-                String::new()
-            };
+async fn ensure_root() -> bool {
+    if env::var("USER").unwrap_or_default() != "root" {
+        println!("🔑 Для операции требуются права root. Вызов sudo...");
+        let status = Command::new("sudo")
+            .args([crate::gpkg::current_gvalli_path().as_str(), "install"])
+            .status()
+            .await;
+        return status.map_or(false, |s| s.success());
+    }
+    true
+}
 
-            if pkg_file.is_empty() {
-                eprintln!("❌ Не удалось найти собранный пакет в {}.", build_dir);
-            } else {
-                println!("📦 Установка собранного пакета: {}", pkg_file);
-                let install_cmd = format!("pacman -U{} {}", if noconfirm { " --noconfirm" } else { "" }, pkg_file);
-                let _ = Command::new("sh").args(["-c", &install_cmd]).status().await;
-                println!("✅ Пакет {} успешно установлен!", package);
-            }
-        } else {
-            eprintln!("❌ Сбой сборки {}.", package);
-        }
-    })
+async fn install_pacman(package: &str, noconfirm: bool) {
+    if !ensure_root().await { return; }
+    println!("🚀 Установка из Pacman: {}", package);
+    let mut args = vec!["-S", package];
+    if noconfirm { args.push("--noconfirm"); }
+    let _ = Command::new("pacman").args(&args).status().await;
+}
+
+async fn install_flatpak(package: &str, noconfirm: bool) {
+    println!("🚀 Установка из Flatpak: {}", package);
+    let mut args = vec!["install", package];
+    if noconfirm { args.push("-y"); }
+    let _ = Command::new("flatpak").args(&args).status().await;
 }

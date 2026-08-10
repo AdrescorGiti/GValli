@@ -1,0 +1,7 @@
+name=gvalli
+version=0.6.0
+description=Ultra-fast interactive CLI aggregator for AUR, Pacman, Flatpak, Gpkg
+exec=gvalli
+maintainer=Giti Adrescor
+email=gitipredlog3619@gmail.com
+github=https://github.com/AdrescorGiti/GValli

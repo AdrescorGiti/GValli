@@ -18,20 +18,41 @@ pub struct Manifest {
     pub version: String,
     pub description: String,
     pub maintainer: String,
+    #[serde(default)]
+    pub maintainer_email: String,
+    #[serde(default)]
+    pub github_repo: String,
     pub exec_binary: String,
     pub dependencies: Vec<String>,
     pub installed_files: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
-struct CargoToml { package: CargoPackage }
+#[derive(Deserialize, Debug, Default)]
+struct CargoToml {
+    #[serde(default)]
+    package: CargoPackage,
+    #[serde(default, rename = "bin")]
+    bins: Vec<CargoBin>,
+}
 
-#[derive(Deserialize, Debug)]
-struct CargoPackage { 
-    name: String, 
-    version: String, 
-    description: Option<String>, 
-    authors: Option<Vec<String>> 
+#[derive(Deserialize, Debug, Default, Clone)]
+struct CargoPackage {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    authors: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct CargoBin {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    path: String,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -39,15 +60,15 @@ struct GpkgDatabase {
     packages: HashMap<String, GpkgEntry>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct GpkgEntry {
-    version: String,
-    files: Vec<String>,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GpkgEntry {
+    pub version: String,
+    pub files: Vec<String>,
+    #[serde(default)]
+    pub github_repo: Option<String>,
+    #[serde(default)]
+    pub exec_binary: Option<String>,
 }
-
-// ==========================================
-// УПРАВЛЕНИЕ БАЗОЙ ДАННЫХ .GPKG
-// ==========================================
 
 fn load_db() -> GpkgDatabase {
     if let Ok(data) = fs::read_to_string(DB_PATH) {
@@ -65,11 +86,80 @@ fn save_db(db: &GpkgDatabase) {
     fs::write(DB_PATH, data).expect("❌ Не удалось сохранить базу данных gpkg");
 }
 
+pub fn current_gvalli_path() -> String {
+    std::env::current_exe()
+        .ok()
+        .filter(|p| p.exists())
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "gvalli".to_string())
+}
+
+pub fn get_gpkg_info(name: &str) -> Option<(GpkgEntry, usize)> {
+    let db = load_db();
+    db.packages.get(name).map(|e| (e.clone(), e.files.len()))
+}
+
+pub fn list_gpkg_detailed() -> Vec<(String, String, usize)> {
+    let db = load_db();
+    let mut result: Vec<(String, String, usize)> = db
+        .packages
+        .iter()
+        .map(|(k, e)| (k.clone(), e.version.clone(), e.files.len()))
+        .collect();
+    result.sort_by(|a, b| a.0.cmp(&b.0));
+    result
+}
+
+pub async fn update_all_gpkg() -> Vec<(String, String, String)> {
+    let db = load_db();
+    let mut updated = Vec::new();
+
+    for (name, entry) in db.packages.iter() {
+        let Some(repo) = entry.github_repo.clone() else {
+            println!("   • {}: нет github-репозитория — пропускаем", name);
+            continue;
+        };
+
+        println!("🔁 Обновление {} из {}", name, repo);
+        let temp_dir = format!("/tmp/gvalli-update-{}", name);
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        let status = Command::new("git")
+            .args(["clone", "--depth=1", &repo, &temp_dir])
+            .status()
+            .await;
+        if !status.map_or(false, |s| s.success()) {
+            eprintln!("   ⚠ Не удалось клонировать репозиторий {} для {}", repo, name);
+            continue;
+        }
+
+        let new_version = load_manifest_from_directory(Path::new(&temp_dir))
+            .map(|m| m.version)
+            .unwrap_or_default();
+
+        if !new_version.is_empty() && new_version == entry.version {
+            println!("   • {} уже актуален (v{})", name, new_version);
+            let _ = fs::remove_dir_all(&temp_dir);
+            continue;
+        }
+
+        if let Some(gpkg_path) = create_package(&temp_dir, false, false).await {
+            println!("⚡ Установка обновления {}...", name);
+            install_package(&gpkg_path).await;
+            updated.push((name.clone(), entry.version.clone(), new_version));
+            let _ = fs::remove_file(&gpkg_path);
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    updated
+}
+
 pub fn is_gpkg_installed(name: &str) -> bool {
     load_db().packages.contains_key(name)
 }
 
-/// Возвращает список всех установленных .gpkg пакетов (имена)
 pub fn list_gpkg_packages() -> Vec<String> {
     let db = load_db();
     let mut names: Vec<String> = db.packages.keys().cloned().collect();
@@ -77,8 +167,6 @@ pub fn list_gpkg_packages() -> Vec<String> {
     names
 }
 
-/// Ищет установленные .gpkg пакеты по частичному совпадению имени.
-/// Возвращает вектор (имя, точное_ли_совпадение).
 pub fn find_gpkg_packages(query: &str) -> Vec<(String, bool)> {
     let db = load_db();
     let q = query.to_lowercase();
@@ -97,7 +185,10 @@ pub fn find_gpkg_packages(query: &str) -> Vec<(String, bool)> {
 pub async fn remove_gpkg(name: &str) {
     if std::env::var("USER").unwrap_or_default() != "root" {
         println!("🔑 Для удаления пакета Gpkg требуются права root. Вызов sudo...");
-        let _ = Command::new("sudo").args(["gvalli", "remove", name]).status().await;
+        let _ = Command::new("sudo")
+            .args([current_gvalli_path().as_str(), "remove", name])
+            .status()
+            .await;
         return;
     }
 
@@ -112,7 +203,6 @@ pub async fn remove_gpkg(name: &str) {
             }
         }
         
-        // Опционально: Пытаемся удалить пустые директории, которые могли остаться (например /usr/share/pkgname)
         let share_dir = Path::new("/usr/share").join(name);
         if share_dir.exists() && share_dir.is_dir() {
             let _ = fs::remove_dir_all(&share_dir);
@@ -124,14 +214,10 @@ pub async fn remove_gpkg(name: &str) {
     }
 }
 
-// ==========================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СБОРКИ АРХИВА
-// ==========================================
-
 fn append_file_to_tar(
     builder: &mut Builder<GzEncoder<File>>,
     src_path: &Path,
-    dest_path: &str, // Абсолютный путь в системе, например "/usr/bin/app"
+    dest_path: &str,
     mode: u32,
     installed_files: &mut Vec<String>,
 ) -> io::Result<()> {
@@ -141,11 +227,9 @@ fn append_file_to_tar(
     header.set_mode(mode);
     header.set_cksum();
     
-    // Внутри архива все системные файлы лежат в папке "files/"
     let tar_path = format!("files{}", dest_path); 
     builder.append_data(&mut header, tar_path, file)?;
     
-    // Сохраняем абсолютный системный путь для манифеста
     installed_files.push(dest_path.to_string());
     Ok(())
 }
@@ -153,7 +237,7 @@ fn append_file_to_tar(
 fn add_directory_recursive(
     builder: &mut Builder<GzEncoder<File>>,
     src_dir: &Path,
-    base_dest_dir: &str, // Абсолютный путь, например "/usr/share/app"
+    base_dest_dir: &str,
     installed_files: &mut Vec<String>,
 ) -> io::Result<()> {
     if src_dir.is_dir() {
@@ -191,48 +275,122 @@ fn scan_for_files_with_ext(dir: &Path, extensions: &[&str]) -> Vec<PathBuf> {
     results
 }
 
-// ==========================================
-// ОСНОВНЫЕ КОМАНДЫ GPKG
-// ==========================================
+fn load_manifest_from_directory(project_path: &Path) -> Result<Manifest, String> {
+    let metadata_path = project_path.join("GPKGM");
+    if !metadata_path.exists() {
+        return Err(format!("❌ Обязательный файл GPKGM не найден: {:?}", metadata_path));
+    }
 
-pub async fn create_package(project_path: &str) -> Option<String> {
+    let content = fs::read_to_string(&metadata_path)
+        .map_err(|e| format!("❌ Не удалось прочитать GPKGM: {e}"))?;
+
+    let mut values = HashMap::new();
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        values.insert(key.trim().to_lowercase(), value.trim().to_string());
+    }
+
+    let name = values.get("name").cloned().ok_or_else(|| "❌ Отсутствует поле name в GPKGM".to_string())?;
+    let version = values.get("version").cloned().ok_or_else(|| "❌ Отсутствует поле version в GPKGM".to_string())?;
+    let description = values.get("description").cloned().unwrap_or_else(|| "Нет описания".to_string());
+    let maintainer = values.get("maintainer").cloned().unwrap_or_else(|| "Unknown".to_string());
+    let maintainer_email = values.get("email").cloned().unwrap_or_default();
+    let github_repo = values.get("github").or_else(|| values.get("repository")).cloned().unwrap_or_default();
+    let exec_binary = values.get("exec").or_else(|| values.get("terminal_name")).cloned().unwrap_or_else(|| name.clone());
+
+    Ok(Manifest {
+        name: name.clone(),
+        version: version.clone(),
+        description,
+        maintainer,
+        maintainer_email,
+        github_repo,
+        exec_binary,
+        dependencies: vec![],
+        installed_files: vec![],
+    })
+}
+
+pub async fn create_package(project_path: &str, require_metadata: bool, install_after: bool) -> Option<String> {
     let path = Path::new(project_path);
-    let cargo_toml_path = path.join("Cargo.toml");
+    let resolved_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+    let cargo_toml_path = resolved_path.join("Cargo.toml");
 
     if !cargo_toml_path.exists() {
-        eprintln!("❌ Ошибка: Cargo.toml не найден в {:?}", cargo_toml_path);
+        eprintln!("❌ Ошибка: Cargo.toml не найден в {:?}", resolved_path);
         return None;
     }
 
-    println!("📦 Чтение метаданных из Cargo.toml...");
-    let cargo_parsed: CargoToml = toml::from_str(&fs::read_to_string(&cargo_toml_path).unwrap()).unwrap();
-    let pkg = cargo_parsed.package;
-
-    let mut manifest = Manifest {
-        name: pkg.name.clone(),
-        version: pkg.version.clone(),
-        description: pkg.description.unwrap_or_else(|| "Нет описания".to_string()),
-        maintainer: pkg.authors.and_then(|a| a.first().cloned()).unwrap_or_else(|| "Unknown".to_string()),
-        exec_binary: pkg.name.clone(),
-        dependencies: vec![],
-        installed_files: vec![],
+    let manifest = match load_manifest_from_directory(&resolved_path) {
+        Ok(m) => m,
+        Err(err) if require_metadata => {
+            eprintln!("{}", err);
+            return None;
+        }
+        Err(err) => {
+            eprintln!("{}", err);
+            return None;
+        }
     };
 
+    println!("📦 Чтение метаданных из GPKGM...");
+    println!("   • name: {}", manifest.name);
+    println!("   • version: {}", manifest.version);
+    println!("   • exec: {}", manifest.exec_binary);
+
     println!("🛠 Компиляция проекта (cargo build --release)...");
-    let status = Command::new("cargo").args(["build", "--release"]).current_dir(path).status().await.unwrap();
+    let status = Command::new("cargo").args(["build", "--release"]).current_dir(&resolved_path).status().await.unwrap();
     if !status.success() {
         eprintln!("❌ Ошибка компиляции проекта.");
         return None;
     }
 
-    let binary_path = path.join("target").join("release").join(&manifest.exec_binary);
+    let cargo_toml: CargoToml = fs::read_to_string(&cargo_toml_path)
+        .ok()
+        .and_then(|c| toml::from_str(&c).ok())
+        .unwrap_or_default();
+
+    let release_dir = resolved_path.join("target").join("release");
+
+    let mut candidates: Vec<PathBuf> = vec![release_dir.join(&manifest.exec_binary)];
+    for bin in &cargo_toml.bins {
+        if !bin.name.is_empty() {
+            candidates.push(release_dir.join(&bin.name));
+        }
+    }
+    if !cargo_toml.package.name.is_empty() {
+        candidates.push(release_dir.join(&cargo_toml.package.name));
+    }
+    candidates.push(release_dir.join(&manifest.name));
+
+    let binary_path = candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .unwrap_or_else(|| release_dir.join(&manifest.exec_binary));
+
     if !binary_path.exists() {
         eprintln!("❌ Бинарный файл не найден: {:?}", binary_path);
+        eprintln!("   Проверенные кандидаты: exec='{}', cargo package='{}', cargo bins={:?}, gpkgm name='{}'",
+            manifest.exec_binary,
+            cargo_toml.package.name,
+            cargo_toml.bins.iter().map(|b| b.name.clone()).collect::<Vec<_>>(),
+            manifest.name);
         return None;
     }
 
     let package_name = format!("{}-{}.gpkg", manifest.name, manifest.version);
-    let package_path = path.join(&package_name);
+    let package_path = resolved_path.join(&package_name);
     
     println!("🗜 Упаковка файлов и ассетов в архив {}...", package_name);
 
@@ -241,13 +399,11 @@ pub async fn create_package(project_path: &str) -> Option<String> {
     let mut builder = Builder::new(enc);
     let mut installed_files = Vec::new();
 
-    // 1. Упаковка бинарного файла (Права: 0755 - rwxr-xr-x)
     let dest_bin = format!("/usr/bin/{}", manifest.exec_binary);
     append_file_to_tar(&mut builder, &binary_path, &dest_bin, 0o755, &mut installed_files).unwrap();
 
-    // 2. Упаковка .desktop лаунчеров (Ищем в корне и в assets/)
-    let mut desktop_files = scan_for_files_with_ext(path, &["desktop"]);
-    let assets_dir = path.join("assets");
+    let mut desktop_files = scan_for_files_with_ext(&resolved_path, &["desktop"]);
+    let assets_dir = resolved_path.join("assets");
     if assets_dir.exists() {
         desktop_files.extend(scan_for_files_with_ext(&assets_dir, &["desktop"]));
     }
@@ -257,8 +413,7 @@ pub async fn create_package(project_path: &str) -> Option<String> {
         append_file_to_tar(&mut builder, &d_file, &dest_desktop, 0o644, &mut installed_files).unwrap();
     }
 
-    // 3. Упаковка Иконок (Ищем в корне проекта)
-    let icon_files = scan_for_files_with_ext(path, &["png", "svg"]);
+    let icon_files = scan_for_files_with_ext(&resolved_path, &["png", "svg"]);
     for i_file in icon_files {
         let file_name = i_file.file_name().unwrap().to_string_lossy();
         let ext = i_file.extension().unwrap().to_str().unwrap();
@@ -272,19 +427,18 @@ pub async fn create_package(project_path: &str) -> Option<String> {
         }
     }
 
-    // 4. Упаковка дополнительных ассетов (Рекурсивно папки assets/ или share/)
     let share_dest = format!("/usr/share/{}", manifest.name);
     if assets_dir.exists() && assets_dir.is_dir() {
         add_directory_recursive(&mut builder, &assets_dir, &share_dest, &mut installed_files).unwrap();
     }
-    let share_dir = path.join("share");
+    let share_dir = resolved_path.join("share");
     if share_dir.exists() && share_dir.is_dir() {
         add_directory_recursive(&mut builder, &share_dir, &share_dest, &mut installed_files).unwrap();
     }
 
-    // 5. Формирование и добавление manifest.json
-    manifest.installed_files = installed_files;
-    let manifest_json = serde_json::to_string_pretty(&manifest).unwrap();
+    let mut manifest_for_archive = manifest;
+    manifest_for_archive.installed_files = installed_files;
+    let manifest_json = serde_json::to_string_pretty(&manifest_for_archive).unwrap();
     let mut header = tar::Header::new_gnu();
     header.set_size(manifest_json.len() as u64);
     header.set_cksum();
@@ -293,6 +447,12 @@ pub async fn create_package(project_path: &str) -> Option<String> {
     builder.finish().unwrap();
 
     println!("✅ Пакет успешно собран: {:?}", package_path);
+
+    if install_after {
+        println!("📦 Установка собранного пакета...");
+        install_package(&package_path.to_string_lossy()).await;
+    }
+
     Some(package_path.to_string_lossy().to_string())
 }
 
@@ -305,7 +465,10 @@ pub async fn install_package(target: &str) {
         };
         
         println!("🔑 Требуются права root. Вызов sudo...");
-        let _ = Command::new("sudo").args(["gvalli", "gpkg", "install", &abs_target]).status().await;
+        let _ = Command::new("sudo")
+            .args([current_gvalli_path().as_str(), "gpkg", "install", &abs_target])
+            .status()
+            .await;
         return;
     }
 
@@ -316,16 +479,27 @@ pub async fn install_package(target: &str) {
     };
     
     if target.starts_with("http://") || target.starts_with("https://") {
-        let response = match reqwest::get(target).await {
+        let client = reqwest::Client::builder().user_agent("GValli").build().unwrap();
+        let mut response = match client.get(target).send().await {
             Ok(r) => r,
             Err(e) => { eprintln!("❌ Ошибка загрузки: {}", e); return; }
         };
-        let bytes = match response.bytes().await {
-            Ok(b) => b,
-            Err(e) => { eprintln!("❌ Ошибка чтения ответа: {}", e); return; }
-        };
-        if let Err(e) = temp_file.write_all(&bytes) {
-            eprintln!("❌ Ошибка записи во временный файл: {}", e); return;
+
+        if !response.status().is_success() {
+            eprintln!("❌ Ошибка: Сервер вернул статус {}", response.status());
+            return;
+        }
+
+        let total_size = response.content_length().unwrap_or(0);
+        println!("⬇️ Загрузка пакета... (Ожидается байт: {})", total_size);
+
+        while let Some(chunk) = match response.chunk().await {
+            Ok(c) => c,
+            Err(e) => { eprintln!("❌ Ошибка при чтении потока данных: {}", e); return; }
+        } {
+            if let Err(e) = temp_file.write_all(&chunk) {
+                eprintln!("❌ Ошибка записи во временный файл: {}", e); return;
+            }
         }
     } else {
         let mut src = match File::open(target) {
@@ -376,7 +550,6 @@ pub async fn install_package(target: &str) {
                 }
             }
             
-            // Распаковка с сохранением оригинальных прав (0755 для бинарников)
             match file.unpack(&target_path) {
                 Ok(_) => println!("  -> Распакован: {:?}", target_path),
                 Err(e) => eprintln!("❌ Ошибка распаковки {:?}: {}", target_path, e),
@@ -384,11 +557,16 @@ pub async fn install_package(target: &str) {
         }
     }
 
-    // Сохраняем в реестр точный список файлов, сгенерированный во время `create`
     let mut db = load_db();
     db.packages.insert(manifest.name.clone(), GpkgEntry {
         version: manifest.version,
         files: manifest.installed_files,
+        github_repo: if manifest.github_repo.is_empty() {
+            None
+        } else {
+            Some(manifest.github_repo)
+        },
+        exec_binary: Some(manifest.exec_binary),
     });
     save_db(&db);
 
@@ -406,7 +584,7 @@ pub async fn get_package(url: &str) {
     }
 
     println!("🚀 Сборка пакета из исходников...");
-    if let Some(gpkg_path) = create_package(&temp_dir).await {
+    if let Some(gpkg_path) = create_package(&temp_dir, false, false).await {
         println!("⚡ Установка только что собранного пакета...");
         install_package(&gpkg_path).await;
         
@@ -414,4 +592,26 @@ pub async fn get_package(url: &str) {
     }
     
     let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn parses_gpkg_manifest_from_metadata_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let metadata_path = temp_dir.path().join("GPKGM");
+        fs::write(&metadata_path, "name=demo\nversion=1.0.0\ndescription=Demo package\nexec=demo\nmaintainer=Test User\nemail=test@example.com\ngithub=https://github.com/example/demo\n").unwrap();
+
+        let manifest = load_manifest_from_directory(temp_dir.path()).unwrap();
+        assert_eq!(manifest.name, "demo");
+        assert_eq!(manifest.version, "1.0.0");
+        assert_eq!(manifest.description, "Demo package");
+        assert_eq!(manifest.exec_binary, "demo");
+        assert_eq!(manifest.maintainer, "Test User");
+        assert_eq!(manifest.maintainer_email, "test@example.com");
+        assert_eq!(manifest.github_repo, "https://github.com/example/demo");
+    }
 }
