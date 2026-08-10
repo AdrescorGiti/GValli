@@ -132,9 +132,23 @@ fn install_aur(package: String, noconfirm: bool) -> Pin<Box<dyn std::future::Fut
         println!("🛠 Сборка makepkg ({}) ...", package);
         let build_cmd = format!("cd {} && makepkg -cf{}", build_dir, if noconfirm { " --noconfirm" } else { "" });
         if Command::new("su").args(["-", &sudo_user, "-c", &build_cmd]).status().await.unwrap().success() {
-            let install_cmd = format!("pacman -U{} {}/*.pkg.tar.zst", if noconfirm { " --noconfirm" } else { "" }, build_dir);
-            let _ = Command::new("sh").args(["-c", &install_cmd]).status().await;
-            println!("✅ Пакет {} успешно установлен!", package);
+            // makepkg может создавать .pkg.tar.zst, .pkg.tar.xz, .pkg.tar.gz, .pkg.tar.lz
+            // Находим собранный пакет автоматически
+            let find_cmd = format!("ls {}/{}-*.pkg.tar.* 2>/dev/null | head -1", build_dir, package);
+            let pkg_file = if let Ok(out) = Command::new("sh").args(["-c", &find_cmd]).output().await {
+                String::from_utf8_lossy(&out.stdout).trim().to_string()
+            } else {
+                String::new()
+            };
+
+            if pkg_file.is_empty() {
+                eprintln!("❌ Не удалось найти собранный пакет в {}.", build_dir);
+            } else {
+                println!("📦 Установка собранного пакета: {}", pkg_file);
+                let install_cmd = format!("pacman -U{} {}", if noconfirm { " --noconfirm" } else { "" }, pkg_file);
+                let _ = Command::new("sh").args(["-c", &install_cmd]).status().await;
+                println!("✅ Пакет {} успешно установлен!", package);
+            }
         } else {
             eprintln!("❌ Сбой сборки {}.", package);
         }

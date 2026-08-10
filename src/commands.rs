@@ -4,12 +4,22 @@ use std::io::{self, Write};
 pub async fn remove_package(package: &str, noconfirm: bool) {
     println!("🔍 Поиск '{}' среди установленных...", package);
 
+    // Сначала ищем точное совпадение в Gpkg
     if crate::gpkg::is_gpkg_installed(package) {
         crate::gpkg::remove_gpkg(package).await;
         return;
     }
 
     let mut matches = Vec::new();
+
+    // Частичные совпадения в базе Gpkg (например "happ" -> "happify")
+    for gpkg_name in crate::gpkg::list_gpkg_packages() {
+        let is_exact = gpkg_name.to_lowercase() == package.to_lowercase();
+        let is_partial = gpkg_name.to_lowercase().contains(&package.to_lowercase());
+        if is_exact || is_partial {
+            matches.push((gpkg_name, "Gpkg", is_exact));
+        }
+    }
 
     if let Ok(out) = Command::new("pacman").arg("-Qq").output().await {
         for line in String::from_utf8_lossy(&out.stdout).lines() {
@@ -63,7 +73,9 @@ pub async fn remove_package(package: &str, noconfirm: bool) {
 
     println!("🗑 Удаление пакета: {} [{}]", target.0, target.1);
 
-    if target.1 == "Pacman/AUR" {
+    if target.1 == "Gpkg" {
+        crate::gpkg::remove_gpkg(&target.0).await;
+    } else if target.1 == "Pacman/AUR" {
         let mut args = vec!["pacman", "-Rns", &target.0];
         if noconfirm { args.push("--noconfirm"); }
         let _ = Command::new("sudo").args(&args).status().await;

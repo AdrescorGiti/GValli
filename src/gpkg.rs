@@ -69,6 +69,31 @@ pub fn is_gpkg_installed(name: &str) -> bool {
     load_db().packages.contains_key(name)
 }
 
+/// Возвращает список всех установленных .gpkg пакетов (имена)
+pub fn list_gpkg_packages() -> Vec<String> {
+    let db = load_db();
+    let mut names: Vec<String> = db.packages.keys().cloned().collect();
+    names.sort();
+    names
+}
+
+/// Ищет установленные .gpkg пакеты по частичному совпадению имени.
+/// Возвращает вектор (имя, точное_ли_совпадение).
+pub fn find_gpkg_packages(query: &str) -> Vec<(String, bool)> {
+    let db = load_db();
+    let q = query.to_lowercase();
+    let mut results = Vec::new();
+    for name in db.packages.keys() {
+        let nl = name.to_lowercase();
+        if nl == q {
+            results.push((name.clone(), true));
+        } else if nl.contains(&q) {
+            results.push((name.clone(), false));
+        }
+    }
+    results
+}
+
 pub async fn remove_gpkg(name: &str) {
     if std::env::var("USER").unwrap_or_default() != "root" {
         println!("🔑 Для удаления пакета Gpkg требуются права root. Вызов sudo...");
@@ -110,7 +135,7 @@ fn append_file_to_tar(
     mode: u32,
     installed_files: &mut Vec<String>,
 ) -> io::Result<()> {
-    let mut file = File::open(src_path)?;
+    let file = File::open(src_path)?;
     let mut header = tar::Header::new_gnu();
     header.set_size(file.metadata()?.len());
     header.set_mode(mode);
@@ -206,9 +231,8 @@ pub async fn create_package(project_path: &str) -> Option<String> {
         return None;
     }
 
-    let current_dir = std::env::current_dir().unwrap();
     let package_name = format!("{}-{}.gpkg", manifest.name, manifest.version);
-    let package_path = current_dir.join(&package_name);
+    let package_path = path.join(&package_name);
     
     println!("🗜 Упаковка файлов и ассетов в архив {}...", package_name);
 
@@ -286,14 +310,33 @@ pub async fn install_package(target: &str) {
     }
 
     println!("🔍 Подготовка к установке: {}", target);
-    let mut temp_file = NamedTempFile::new().unwrap();
+    let mut temp_file = match NamedTempFile::new() {
+        Ok(f) => f,
+        Err(e) => { eprintln!("❌ Не удалось создать временный файл: {}", e); return; }
+    };
     
     if target.starts_with("http://") || target.starts_with("https://") {
-        let response = reqwest::get(target).await.unwrap();
-        temp_file.write_all(&response.bytes().await.unwrap()).unwrap();
+        let response = match reqwest::get(target).await {
+            Ok(r) => r,
+            Err(e) => { eprintln!("❌ Ошибка загрузки: {}", e); return; }
+        };
+        let bytes = match response.bytes().await {
+            Ok(b) => b,
+            Err(e) => { eprintln!("❌ Ошибка чтения ответа: {}", e); return; }
+        };
+        if let Err(e) = temp_file.write_all(&bytes) {
+            eprintln!("❌ Ошибка записи во временный файл: {}", e); return;
+        }
     } else {
-        io::copy(&mut File::open(target).unwrap(), &mut temp_file).unwrap();
+        let mut src = match File::open(target) {
+            Ok(f) => f,
+            Err(e) => { eprintln!("❌ Не удалось открыть файл '{}': {}", target, e); return; }
+        };
+        if let Err(e) = io::copy(&mut src, &mut temp_file) {
+            eprintln!("❌ Ошибка копирования: {}", e); return;
+        }
     }
+    temp_file.flush().unwrap_or_default();
 
     let mut archive = Archive::new(GzDecoder::new(File::open(temp_file.path()).unwrap()));
     let mut manifest_opt = None;
@@ -315,19 +358,29 @@ pub async fn install_package(target: &str) {
 
     let mut archive = Archive::new(GzDecoder::new(File::open(temp_file.path()).unwrap()));
 
-    for file in archive.entries().unwrap() {
-        let mut file = file.unwrap();
+    for entry in archive.entries().unwrap() {
+        let mut file = match entry {
+            Ok(f) => f,
+            Err(e) => { eprintln!("⚠ Пропуск поврежденной записи архива: {}", e); continue; }
+        };
         let path_str = file.path().unwrap().to_string_lossy().to_string();
 
         if path_str.starts_with("files/") {
             let sys_path = path_str.strip_prefix("files/").unwrap();
             let target_path = Path::new("/").join(sys_path);
             
-            if let Some(parent) = target_path.parent() { fs::create_dir_all(parent).unwrap(); }
+            if let Some(parent) = target_path.parent() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    eprintln!("❌ Не удалось создать директорию {:?}: {}", parent, e);
+                    continue;
+                }
+            }
             
             // Распаковка с сохранением оригинальных прав (0755 для бинарников)
-            file.unpack(&target_path).unwrap();
-            println!("  -> Распакован: {:?}", target_path);
+            match file.unpack(&target_path) {
+                Ok(_) => println!("  -> Распакован: {:?}", target_path),
+                Err(e) => eprintln!("❌ Ошибка распаковки {:?}: {}", target_path, e),
+            }
         }
     }
 
