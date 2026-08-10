@@ -116,6 +116,8 @@ gvalli install <package>
 gvalli remove <package>
 gvalli update
 gvalli clean
+gvalli info <package>
+gvalli list
 ```
 
 These commands are intended to cover the most common day-to-day operations while keeping the interface simple and predictable.
@@ -126,11 +128,17 @@ These commands are intended to cover the most common day-to-day operations while
 
 | Command | Alias | Description |
 | --- | --- | --- |
-| `gvalli search <query>` | `gvalli s`, `gvalli S` | Interactive search across supported sources |
+| `gvalli search <query>` | `gvalli s`, `gvalli S` | Interactive search across supported sources; `--json` outputs machine-readable JSON |
 | `gvalli install <pkg>` | `gvalli i`, `gvalli I` | Install a package from the best available source |
-| `gvalli remove <pkg>` | `gvalli r`, `gvalli R` | Find and remove packages from the system |
-| `gvalli update` | `gvalli u`, `gvalli U`, `Syu` | Update Pacman packages and Flatpak runtimes |
-| `gvalli clean` | `gvalli c`, `gvalli C` | Clean package caches and remove unused Flatpak data |
+| `gvalli remove <pkg>` | `gvalli r`, `gvalli R` | Find and remove packages from the system; `--all` removes everything |
+| `gvalli update` | `gvalli u`, `gvalli U`, `Syu` | Update Pacman packages and Flatpak runtimes; `--gpkg` also updates Gpkg packages from GitHub |
+| `gvalli clean` | `gvalli c`, `gvalli C` | Clean package caches and remove unused Flatpak data; `--all` deep-cleans caches and temp files |
+| `gvalli info <pkg>` | `gvalli in` | Detailed info about a package (Gpkg / Pacman / AUR / Flatpak) |
+| `gvalli list` | `gvalli l`, `gvalli L` | List installed packages; `--gpkg` shows only Gpkg, `--flatpak` adds Flatpak |
+| `gvalli autoremove` | `gvalli ar` | Remove orphan packages (Pacman) and unused Flatpak runtimes |
+| `gvalli verify` | `gvalli v` | Check integrity of installed Gpkg packages (missing files) |
+| `gvalli doctor` | `gvalli d` | Environment diagnostics: tools, sudo, network, Gpkg DB |
+| `gvalli run <pkg>` | — | Launch an installed Gpkg package's binary |
 
 ---
 
@@ -200,11 +208,17 @@ gvalli clean
 
 | Команда | Алиас | Описание |
 | --- | --- | --- |
-| `gvalli search <запрос>` | `gvalli s`, `gvalli S` | Поиск по доступным пакетным источникам |
+| `gvalli search <запрос>` | `gvalli s`, `gvalli S` | Поиск по доступным пакетным источникам; `--json` — машинночитаемый вывод |
 | `gvalli install <пакет>` | `gvalli i`, `gvalli I` | Установка пакета из подходящего источника |
-| `gvalli remove <пакет>` | `gvalli r`, `gvalli R` | Поиск и удаление пакета из системы |
-| `gvalli update` | `gvalli u`, `gvalli U`, `Syu` | Обновление пакетов и окружения |
-| `gvalli clean` | `gvalli c`, `gvalli C` | Очистка кэша и неиспользуемых данных |
+| `gvalli remove <пакет>` | `gvalli r`, `gvalli R` | Поиск и удаление пакета из системы; `--all` — удалить всё |
+| `gvalli update` | `gvalli u`, `gvalli U`, `Syu` | Обновление пакетов и окружения; `--gpkg` — обновить и .gpkg из GitHub |
+| `gvalli clean` | `gvalli c`, `gvalli C` | Очистка кэша и неиспользуемых данных; `--all` — глубокая очистка |
+| `gvalli info <пакет>` | `gvalli in` | Подробная информация о пакете (Gpkg / Pacman / AUR / Flatpak) |
+| `gvalli list` | `gvalli l`, `gvalli L` | Список установленных пакетов |
+| `gvalli autoremove` | `gvalli ar` | Удаление пакетов-сирот и неиспользуемых зависимостей |
+| `gvalli verify` | `gvalli v` | Проверка целостности установленных .gpkg пакетов |
+| `gvalli doctor` | `gvalli d` | Диагностика окружения |
+| `gvalli run <пакет>` | — | Запуск установленного .gpkg пакета |
 
 ### Репозиторий
 
@@ -216,3 +230,5 @@ gvalli clean
 ### Лицензия
 
 Проект распространяется под лицензией MIT.
+
+
