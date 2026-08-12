@@ -1,6 +1,6 @@
 # Maintainer: Giti Adrescor <your-email@domain.com>
 pkgname=gvalli
-pkgver=0.6.0
+pkgver=0.7.2
 pkgrel=1
 pkgdesc="Ультрабыстрый CLI-агрегатор пакетных менеджеров (AUR, Pacman, Flatpak)"
 arch=('x86_64' 'aarch64')

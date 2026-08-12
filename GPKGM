@@ -1,6 +1,6 @@
 name=gvalli
-version=0.6.0
-description=Ultra-fast interactive CLI aggregator for AUR, Pacman, Flatpak, Gpkg
+version=0.7.2
+description=Ultra-fast interactive CLI aggregator & Native Package Manager for G OS
 exec=gvalli
 maintainer=Giti Adrescor
 email=gitipredlog3619@gmail.com
