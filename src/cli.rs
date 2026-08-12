@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "GValli", version = "0.5.0")]
+#[command(name = "GValli", version = "0.6.0", about = "Native Package Manager for G OS")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -9,61 +9,36 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    #[command(visible_alias = "s", visible_alias = "S")]
+    #[command(visible_alias = "s")]
     Search { 
         query: String,
-        #[arg(short, long)] pacman: bool,
-        #[arg(short, long)] flatpak: bool,
         #[arg(long)] json: bool,
     },
 
-    Create {
-        #[arg(value_name = "PATH")]
-        path: Option<String>,
-        #[arg(short = 's', long = "sync")]
-        sync: bool,
-        #[arg(short = 'i', long = "install")]
-        install: bool,
-    },
-    
-    #[command(visible_alias = "i", visible_alias = "I")]
+    #[command(visible_alias = "i")]
     Install { 
         package: String,
-        #[arg(long)] noconfirm: bool,
     },
-    
-    #[command(visible_alias = "r", visible_alias = "R")]
+
+    #[command(visible_alias = "r")]
     Remove { 
         package: Option<String>,
         #[arg(long)] all: bool,
-        #[arg(long)] noconfirm: bool,
-    },
-    
-    #[command(visible_alias = "u", visible_alias = "U", visible_alias = "Syu")]
-    Update {
-        #[arg(long)] noconfirm: bool,
-        #[arg(long)] gpkg: bool,
     },
 
-    #[command(visible_alias = "c", visible_alias = "C")]
+    #[command(visible_alias = "u")]
+    Update,
+
+    #[command(visible_alias = "c")]
     Clean {
-        #[arg(long)] noconfirm: bool,
         #[arg(long)] all: bool,
     },
 
     #[command(visible_alias = "in")]
     Info { package: String },
 
-    #[command(visible_alias = "l", visible_alias = "L")]
-    List {
-        #[arg(long)] flatpak: bool,
-        #[arg(long)] gpkg: bool,
-    },
-
-    #[command(visible_alias = "ar")]
-    Autoremove {
-        #[arg(long)] noconfirm: bool,
-    },
+    #[command(visible_alias = "l")]
+    List,
 
     #[command(visible_alias = "v")]
     Verify,
@@ -80,13 +55,11 @@ pub enum Commands {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum GpkgCommands {
     Create {
         #[arg(value_name = "PATH")]
         path: Option<String>,
-        #[arg(short = 's', long = "sync")]
-        sync: bool,
         #[arg(short = 'i', long = "install")]
         install: bool,
     },
@@ -95,5 +68,17 @@ pub enum GpkgCommands {
     },
     Get { 
         url: String 
+    },
+    Extract {
+        target: String,
+        #[arg(short, long)]
+        dest: Option<String>,
+    },
+    Inspect {
+        package: String,
+    },
+    Verify,
+    Uninstall {
+        package: String,
     },
 }
