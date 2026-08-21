@@ -1,7 +1,7 @@
 # GValli
 
 <p align="center">
-  <a href="https://github.com/AdrescorGiti/GValli"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
+  <a href="https://github.com/AdrescorGiti/GValli"><img src="https://img.shields.io/badge/License-GPLv3.0-blue.svg" alt="License" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.70%2B-orange.svg" alt="Rust" /></a>
   <a href="https://archlinux.org/"><img src="https://img.shields.io/badge/Platform-Arch%20Linux-1793d1.svg" alt="Arch Linux" /></a>
   <a href="https://github.com/AdrescorGiti/gvalli-repo"><img src="https://img.shields.io/badge/Repository-gvalli--repo-8a2be2.svg" alt="Gvalli repository" /></a>
